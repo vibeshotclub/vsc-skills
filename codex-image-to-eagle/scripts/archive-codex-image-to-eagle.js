@@ -4,23 +4,33 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const os = require('os');
+const { spawn } = require('child_process');
 
 const DEFAULT_IMAGE_DIR = process.env.CODEX_GENERATED_IMAGES_DIR || path.join(os.homedir(), '.codex', 'generated_images');
-const DEFAULT_SERVER = process.env.EAGLE_SERVER_URL || 'http://localhost:41596';
+const DEFAULT_SERVER = process.env.EAGLE_SERVER_URL || 'http://127.0.0.1:41596';
+const DEFAULT_MCP_SERVER_NAME = process.env.EAGLE_MCP_SERVER_NAME || 'eagle';
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 const DEFAULT_FOLDER_NAME = 'Codex 生成图';
 const DEFAULT_TAGS = ['Codex', 'AI生成', 'Prompt'];
-
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+let cliArgs = {};
+let stdioClientPromise = null;
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  cliArgs = args;
 
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.checkConnection) {
+    const result = await callTool('get_app_info', {});
+    writeJson({
+      success: true,
+      transport: transportName(),
+      result,
+    });
     return;
   }
 
@@ -54,6 +64,7 @@ async function main() {
   if (dryRun) {
     writeJson({
       dryRun: true,
+      transport: transportName(),
       server: DEFAULT_SERVER,
       imageDir,
       dateSubfolders: shouldUseDateSubfolders(args),
@@ -83,6 +94,7 @@ function parseArgs(argv) {
     else if (arg === '--latest') args.latest = true;
     else if (arg === '--latest-session') args.latestSession = true;
     else if (arg === '--dry-run') args.dryRun = true;
+    else if (arg === '--check-connection') args.checkConnection = true;
     else if (arg === '--prompt-stdin') args.promptStdin = true;
     else if (arg === '--no-date-subfolders' || arg === '--flat-folder') args.noDateSubfolders = true;
     else if (arg.startsWith('--')) {
@@ -312,6 +324,11 @@ function buildAnnotation(prompt, imagePath, archivedAt) {
 }
 
 async function callTool(tool, params) {
+  if (transportName() === 'stdio') {
+    const client = await getStdioClient();
+    return client.callTool(tool, params);
+  }
+
   const url = new URL(DEFAULT_SERVER);
   const body = JSON.stringify({ tool, params });
 
@@ -337,6 +354,302 @@ async function callTool(tool, params) {
   }
 
   return parsed;
+}
+
+function transportName() {
+  const explicit = cliArgs.transport || process.env.EAGLE_MCP_TRANSPORT;
+  if (explicit) return explicit.toLowerCase();
+
+  const serverName = cliArgs.mcpServer || process.env.EAGLE_MCP_SERVER_NAME || DEFAULT_MCP_SERVER_NAME;
+  const configPath = expandHome(cliArgs.codexConfig || process.env.CODEX_CONFIG_FILE || path.join(os.homedir(), '.codex', 'config.toml'));
+  return resolveCodexMcpServerConfig(configPath, serverName) ? 'stdio' : 'http';
+}
+
+async function getStdioClient() {
+  if (!stdioClientPromise) {
+    stdioClientPromise = StdioMcpClient.create(resolveStdioConfig(cliArgs));
+  }
+  return stdioClientPromise;
+}
+
+function resolveStdioConfig(args) {
+  const command = args.stdioCommand || process.env.EAGLE_MCP_COMMAND;
+  const argText = args.stdioArgs || process.env.EAGLE_MCP_ARGS;
+  if (command) {
+    return {
+      command,
+      args: parseArgList(argText),
+      env: parseEnvObject(process.env.EAGLE_MCP_ENV || ''),
+    };
+  }
+
+  const serverName = args.mcpServer || process.env.EAGLE_MCP_SERVER_NAME || DEFAULT_MCP_SERVER_NAME;
+  const configPath = expandHome(args.codexConfig || process.env.CODEX_CONFIG_FILE || path.join(os.homedir(), '.codex', 'config.toml'));
+  const config = resolveCodexMcpServerConfig(configPath, serverName);
+  if (config) return config;
+
+  throw new Error(`No Eagle stdio MCP config found in ${configPath}. Use --stdio-command or configure a [mcp_servers.${serverName}] entry.`);
+}
+
+function resolveCodexMcpServerConfig(configPath, preferredName) {
+  const preferred = readCodexMcpServerConfig(configPath, preferredName);
+  if (preferred) return preferred;
+  if (preferredName !== 'eagle') {
+    const eagle = readCodexMcpServerConfig(configPath, 'eagle');
+    if (eagle) return eagle;
+  }
+  return findEagleMcpServerConfig(configPath);
+}
+
+function readCodexMcpServerConfig(configPath, serverName) {
+  if (!fs.existsSync(configPath)) return null;
+
+  const text = fs.readFileSync(configPath, 'utf8');
+  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sectionRe = new RegExp(`^\\s*\\[mcp_servers\\.(?:"${escaped}"|${escaped})\\]\\s*$`);
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => sectionRe.test(line));
+  if (start === -1) return null;
+
+  const section = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[/.test(lines[i])) break;
+    section.push(lines[i]);
+  }
+
+  const command = parseTomlStringValue(section, 'command');
+  if (!command) return null;
+
+  return {
+    command,
+    args: parseTomlStringArrayValue(section, 'args'),
+    env: parseTomlInlineObjectValue(section, 'env'),
+  };
+}
+
+function findEagleMcpServerConfig(configPath) {
+  if (!fs.existsSync(configPath)) return null;
+
+  const text = fs.readFileSync(configPath, 'utf8');
+  const lines = text.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = lines[i].match(/^\s*\[mcp_servers\.(?:"([^"]+)"|([A-Za-z0-9_-]+))\]\s*$/);
+    if (!match) continue;
+
+    const section = [];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (/^\s*\[/.test(lines[j])) break;
+      section.push(lines[j]);
+    }
+
+    const config = {
+      command: parseTomlStringValue(section, 'command'),
+      args: parseTomlStringArrayValue(section, 'args'),
+      env: parseTomlInlineObjectValue(section, 'env'),
+    };
+    if (!config.command) continue;
+    if (looksLikeEagleMcpConfig(config, match[1] || match[2])) return config;
+  }
+
+  return null;
+}
+
+function looksLikeEagleMcpConfig(config, name) {
+  const haystack = [
+    name,
+    config.command,
+    ...(config.args || []),
+    ...Object.values(config.env || {}),
+  ].join(' ').toLowerCase();
+
+  return haystack.includes('eagle') || haystack.includes('mcp-proxy.js') || haystack.includes('mcp-server');
+}
+
+function parseTomlStringValue(lines, key) {
+  const re = new RegExp(`^\\s*${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*$`);
+  for (const line of lines) {
+    const match = line.match(re);
+    if (match) return unescapeTomlString(match[1]);
+  }
+  return null;
+}
+
+function parseTomlStringArrayValue(lines, key) {
+  const re = new RegExp(`^\\s*${key}\\s*=\\s*\\[(.*)\\]\\s*$`);
+  for (const line of lines) {
+    const match = line.match(re);
+    if (!match) continue;
+    return [...match[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((item) => unescapeTomlString(item[1]));
+  }
+  return [];
+}
+
+function parseTomlInlineObjectValue(lines, key) {
+  const re = new RegExp(`^\\s*${key}\\s*=\\s*\\{(.*)\\}\\s*$`);
+  for (const line of lines) {
+    const match = line.match(re);
+    if (!match) continue;
+    const env = {};
+    for (const item of match[1].matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"((?:[^"\\]|\\.)*)"/g)) {
+      env[item[1]] = unescapeTomlString(item[2]);
+    }
+    return env;
+  }
+  return {};
+}
+
+function unescapeTomlString(value) {
+  return value
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t');
+}
+
+function parseArgList(value) {
+  if (!value) return [];
+  const raw = value.trim();
+  if (!raw) return [];
+  if (raw.startsWith('[')) {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error('EAGLE_MCP_ARGS JSON must be an array');
+    return parsed.map(String);
+  }
+  return raw.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function parseEnvObject(value) {
+  if (!value.trim()) return {};
+  if (value.trim().startsWith('{')) return JSON.parse(value);
+  const env = {};
+  for (const item of value.split(',')) {
+    const [key, ...rest] = item.split('=');
+    if (key && rest.length > 0) env[key.trim()] = rest.join('=').trim();
+  }
+  return env;
+}
+
+class StdioMcpClient {
+  static async create(config) {
+    const client = new StdioMcpClient(config);
+    await client.start();
+    return client;
+  }
+
+  constructor(config) {
+    this.config = config;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.stderrTail = '';
+  }
+
+  async start() {
+    this.child = spawn(this.config.command, this.config.args || [], {
+      env: { ...process.env, ...(this.config.env || {}) },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    this.child.stdout.setEncoding('utf8');
+    this.child.stderr.setEncoding('utf8');
+    this.child.stdout.on('data', (data) => this.handleStdout(data));
+    this.child.stderr.on('data', (data) => {
+      this.stderrTail = (this.stderrTail + data).slice(-4000);
+    });
+    this.child.on('exit', (code, signal) => {
+      const error = new Error(`stdio MCP server exited (${signal || code}). ${this.stderrTail}`.trim());
+      for (const { reject } of this.pending.values()) reject(error);
+      this.pending.clear();
+    });
+
+    await this.request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'codex-image-to-eagle', version: '1.0.0' },
+    });
+    this.notify('notifications/initialized', {});
+  }
+
+  handleStdout(data) {
+    this.buffer = (this.buffer || '') + data;
+    const lines = this.buffer.split('\n');
+    this.buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch (error) {
+        continue;
+      }
+
+      if (message.id !== undefined && this.pending.has(message.id)) {
+        const { resolve, reject, timeout } = this.pending.get(message.id);
+        clearTimeout(timeout);
+        this.pending.delete(message.id);
+        if (message.error) reject(new Error(JSON.stringify(message.error)));
+        else resolve(message.result);
+      }
+    }
+  }
+
+  request(method, params) {
+    const id = this.nextId;
+    this.nextId += 1;
+
+    const message = { jsonrpc: '2.0', id, method, params };
+    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`stdio MCP request timed out: ${method}. ${this.stderrTail}`.trim()));
+      }, 120000);
+      this.pending.set(id, { resolve, reject, timeout });
+    });
+  }
+
+  notify(method, params) {
+    this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
+  }
+
+  async callTool(name, args) {
+    const result = await this.request('tools/call', {
+      name,
+      arguments: args || {},
+    });
+    return normalizeMcpToolResult(name, result);
+  }
+
+  close() {
+    if (this.child && !this.child.killed) {
+      this.child.stdin.end();
+    }
+  }
+}
+
+function normalizeMcpToolResult(tool, result) {
+  if (!result || !Array.isArray(result.content)) return result;
+
+  const text = result.content
+    .filter((item) => item && item.type === 'text' && typeof item.text === 'string')
+    .map((item) => item.text)
+    .join('\n')
+    .trim();
+
+  if (!text) return result;
+
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && parsed.success === false) {
+      throw new Error(`Eagle tool ${tool} failed: ${JSON.stringify(parsed)}`);
+    }
+    return parsed;
+  } catch (error) {
+    if (error.message.startsWith('Eagle tool ')) throw error;
+    return { success: true, data: text };
+  }
 }
 
 function httpRequest(options, body) {
@@ -401,9 +714,35 @@ Options:
   --tags <tags>            Extra tags as comma list or JSON array
   --name <name>            Eagle item name
   --dry-run                Print payload without modifying Eagle
+  --check-connection       Test Eagle MCP connectivity without importing images
+  --transport <http|stdio> Transport to use (default: auto; stdio if Eagle MCP config is found)
+  --mcp-server <name>      Preferred Codex MCP server name for stdio config (default: eagle)
+  --codex-config <file>    Codex config file for stdio lookup (default: ~/.codex/config.toml)
+  --stdio-command <cmd>    Override stdio MCP command instead of reading config
+  --stdio-args <args>      Stdio MCP args as JSON array or comma list
 
 Environment:
   CODEX_GENERATED_IMAGES_DIR  Override the default Codex generated image directory
   EAGLE_SERVER_URL            Override Eagle MCP server URL
+  EAGLE_MCP_TRANSPORT         Set to stdio to use a stdio MCP server
+  EAGLE_MCP_SERVER_NAME       Codex MCP server name for stdio config
+  EAGLE_MCP_COMMAND           Override stdio MCP command
+  EAGLE_MCP_ARGS              Override stdio MCP args as JSON array or comma list
 `);
 }
+
+main()
+  .finally(async () => {
+    if (stdioClientPromise) {
+      try {
+        const client = await stdioClientPromise;
+        client.close();
+      } catch (error) {
+        // Ignore cleanup errors after the main command has already finished.
+      }
+    }
+  })
+  .catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

@@ -21,10 +21,22 @@
 4. 本机已安装 Node.js
 5. Codex 生成图片保存在默认目录，或你已指定自定义目录
 
-可用下面命令测试 Eagle MCP 是否可访问：
+推荐在 Codex 中配置 Eagle 的 stdio MCP。配置好后，本 Skill 会自动读取当前用户的 `~/.codex/config.toml`，不用在命令里手动传 Eagle 地址。
+
+示例：
+
+```toml
+[mcp_servers.eagle]
+command = "node"
+args = ["/你的/Eagle/Plugins/mcp-server/modules/mcp-proxy.js"]
+```
+
+如果你的 MCP 名称不是 `eagle`，通常也没关系。脚本会自动扫描看起来像 Eagle MCP 的配置。
+
+测试连接：
 
 ```bash
-node -e 'const http=require("http");const body=JSON.stringify({tool:"get_app_info",params:{}});const req=http.request({hostname:"localhost",port:41596,path:"/api/tools/call",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(body)}},res=>res.pipe(process.stdout));req.on("error",err=>{console.error(err.message);process.exit(1)});req.end(body);'
+node scripts/archive-codex-image-to-eagle.js --check-connection
 ```
 
 ## 安装为 Codex 全局 Skill
@@ -44,25 +56,6 @@ cp -R codex-image-to-eagle "$CODEX_HOME/skills/"
 ```
 
 安装后重启 Codex，让新 Skill 生效。
-
-## 执行路径
-
-README 里的 `node scripts/archive-codex-image-to-eagle.js ...` 是相对 Skill 目录执行的写法。
-
-如果你在本仓库的 Skill 源码目录中执行：
-
-```bash
-cd codex-image-to-eagle
-node scripts/archive-codex-image-to-eagle.js --latest --prompt "完整提示词"
-```
-
-如果你已经安装为 Codex 全局 Skill，可以从任意目录使用绝对路径执行：
-
-```bash
-node "$HOME/.codex/skills/codex-image-to-eagle/scripts/archive-codex-image-to-eagle.js" --latest --prompt "完整提示词"
-```
-
-它不依赖当前项目根目录，也不依赖 Codex 启动 session 的目录。图片默认从 `~/.codex/generated_images` 读取。
 
 ## 基础用法
 
@@ -88,6 +81,12 @@ node scripts/archive-codex-image-to-eagle.js --path "/absolute/path/image.png" -
 
 ```bash
 node scripts/archive-codex-image-to-eagle.js --latest --prompt "测试提示词" --dry-run
+```
+
+如果脚本不在 Skill 目录里执行，可以用全局安装后的绝对路径：
+
+```bash
+node "$HOME/.codex/skills/codex-image-to-eagle/scripts/archive-codex-image-to-eagle.js" --latest --prompt "完整提示词"
 ```
 
 ## `--latest` 与 `--latest-session` 的选择规则
