@@ -34,7 +34,7 @@ async function main() {
     throw new Error(`No image files found in ${imageDir}`);
   }
 
-  const folderIds = await resolveFolders(args, dryRun);
+  const folderIdsByImagePath = await resolveFoldersForImages(args, imagePaths, dryRun);
   const archivedAt = new Date().toISOString();
   const items = imagePaths.map((imagePath, index) => ({
     source: {
@@ -43,6 +43,7 @@ async function main() {
     },
     name: args.name || buildName(imagePath, index, imagePaths.length),
     annotation: buildAnnotation(prompt, imagePath, archivedAt),
+    folders: folderIdsByImagePath.get(imagePath) || [],
   }));
 
   const payload = {
@@ -50,16 +51,13 @@ async function main() {
     items,
   };
 
-  if (folderIds.length > 0) {
-    payload.folders = folderIds;
-  }
-
   if (dryRun) {
     writeJson({
       dryRun: true,
       server: DEFAULT_SERVER,
       imageDir,
-      folderIds,
+      dateSubfolders: shouldUseDateSubfolders(args),
+      foldersByImagePath: Object.fromEntries(folderIdsByImagePath),
       payload,
     });
     return;
@@ -69,7 +67,7 @@ async function main() {
   writeJson({
     success: true,
     imagePaths,
-    folderIds,
+    foldersByImagePath: Object.fromEntries(folderIdsByImagePath),
     tags,
     result,
   });
@@ -86,6 +84,7 @@ function parseArgs(argv) {
     else if (arg === '--latest-session') args.latestSession = true;
     else if (arg === '--dry-run') args.dryRun = true;
     else if (arg === '--prompt-stdin') args.promptStdin = true;
+    else if (arg === '--no-date-subfolders' || arg === '--flat-folder') args.noDateSubfolders = true;
     else if (arg.startsWith('--')) {
       const key = toCamel(arg.slice(2));
       const value = argv[i + 1];
@@ -199,12 +198,34 @@ function statMtimeMs(filePath) {
   return fs.statSync(filePath).mtimeMs;
 }
 
-async function resolveFolders(args, dryRun) {
-  if (args.folderId) return [args.folderId];
+async function resolveFoldersForImages(args, imagePaths, dryRun) {
+  if (args.folderId) {
+    return new Map(imagePaths.map((imagePath) => [imagePath, [args.folderId]]));
+  }
 
-  const folderName = args.folderName || DEFAULT_FOLDER_NAME;
-  if (!folderName) return [];
-  if (dryRun) return [`folder-name:${folderName}`];
+  const rootFolderName = args.folderName || DEFAULT_FOLDER_NAME;
+  if (!rootFolderName) return new Map(imagePaths.map((imagePath) => [imagePath, []]));
+
+  if (!shouldUseDateSubfolders(args)) {
+    const folderIds = await resolveFolderPath([rootFolderName], args, dryRun);
+    return new Map(imagePaths.map((imagePath) => [imagePath, folderIds]));
+  }
+
+  const uniqueDateNames = unique(imagePaths.map(dateFolderName));
+  const idsByDateName = new Map();
+  for (const dateName of uniqueDateNames) {
+    idsByDateName.set(dateName, await resolveFolderPath([rootFolderName, dateName], args, dryRun));
+  }
+
+  return new Map(imagePaths.map((imagePath) => [imagePath, idsByDateName.get(dateFolderName(imagePath)) || []]));
+}
+
+function shouldUseDateSubfolders(args) {
+  return !args.noDateSubfolders && !args.folderId;
+}
+
+async function resolveFolderPath(names, args, dryRun) {
+  if (dryRun) return [`folder-path:${names.join('/')}`];
 
   const existing = await callTool('folder_get', {
     getAllHierarchy: true,
@@ -212,28 +233,48 @@ async function resolveFolders(args, dryRun) {
   });
 
   const folders = flattenFolders(existing.data || []);
-  const matched = folders.find((folder) => folder.name === folderName);
-  if (matched) return [matched.id];
+  let parentId = null;
+  let current = null;
 
-  if (args.noCreateFolder) return [];
+  for (const name of names) {
+    current = folders.find((folder) => folder.name === name && normalizeParent(folder.parent) === normalizeParent(parentId));
+    if (!current) {
+      if (args.noCreateFolder) return [];
 
-  const created = await callTool('folder_create', {
-    folders: [
-      {
-        name: folderName,
-        iconColor: 'blue',
-        description: 'Codex generated images archived with prompts.',
-      },
-    ],
-  });
+      const created = await callTool('folder_create', {
+        parentId: parentId || undefined,
+        folders: [
+          {
+            name,
+            parentId: parentId || undefined,
+            iconColor: parentId ? 'aqua' : 'blue',
+            description: parentId ? 'Codex generated images grouped by local generation date.' : 'Codex generated images archived with prompts.',
+          },
+        ],
+      });
 
-  const createdFolders = flattenFolders(created.data || []);
-  const createdFolder = createdFolders.find((folder) => folder.name === folderName) || createdFolders[0];
-  if (!createdFolder || !createdFolder.id) {
-    throw new Error(`Folder was created but no folder ID was returned: ${JSON.stringify(created)}`);
+      const createdFolders = flattenFolders(created.data || []);
+      current = createdFolders.find((folder) => folder.name === name) || createdFolders[0];
+      if (!current || !current.id) {
+        throw new Error(`Folder was created but no folder ID was returned: ${JSON.stringify(created)}`);
+      }
+
+      folders.push(current);
+    }
+
+    parentId = current.id;
   }
 
-  return [createdFolder.id];
+  return current ? [current.id] : [];
+}
+
+function normalizeParent(value) {
+  return value || null;
+}
+
+function dateFolderName(imagePath) {
+  const date = fs.statSync(imagePath).mtime;
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
 function flattenFolders(value) {
@@ -353,8 +394,10 @@ Options:
   --prompt-file <file>     Read prompt from a text file
   --prompt-stdin           Read prompt from stdin
   --folder-name <name>     Target Eagle folder name (default: Codex 生成图)
-  --folder-id <id>         Target Eagle folder ID
+  --folder-id <id>         Exact target Eagle folder ID; disables date subfolders
   --no-create-folder true  Do not create folder if --folder-name is missing
+  --no-date-subfolders     Import into the root folder instead of Codex 生成图/YYYY-M-D
+  --flat-folder            Alias for --no-date-subfolders
   --tags <tags>            Extra tags as comma list or JSON array
   --name <name>            Eagle item name
   --dry-run                Print payload without modifying Eagle

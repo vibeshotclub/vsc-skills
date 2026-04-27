@@ -8,7 +8,8 @@
 - 支持导入最新一张图片或最新一次生成会话中的全部图片
 - 将提示词写入 Eagle `annotation`
 - 自动添加基础标签：`Codex`、`AI生成`、`Prompt`
-- 支持指定 Eagle 文件夹名称或文件夹 ID
+- 默认按本地生成日期归档到 `Codex 生成图/YYYY-M-D`
+- 支持指定 Eagle 根文件夹名称或精确文件夹 ID
 - 支持跨平台默认路径：`~/.codex/generated_images`
 - 支持用环境变量覆盖图片目录
 
@@ -28,7 +29,7 @@ node -e 'const http=require("http");const body=JSON.stringify({tool:"get_app_inf
 
 ## 安装为 Codex 全局 Skill
 
-将本目录复制到 Codex 全局 skills 目录：
+在本仓库根目录执行，将 Skill 复制到 Codex 全局 skills 目录：
 
 ```bash
 mkdir -p ~/.codex/skills
@@ -43,6 +44,25 @@ cp -R codex-image-to-eagle "$CODEX_HOME/skills/"
 ```
 
 安装后重启 Codex，让新 Skill 生效。
+
+## 执行路径
+
+README 里的 `node scripts/archive-codex-image-to-eagle.js ...` 是相对 Skill 目录执行的写法。
+
+如果你在本仓库的 Skill 源码目录中执行：
+
+```bash
+cd codex-image-to-eagle
+node scripts/archive-codex-image-to-eagle.js --latest --prompt "完整提示词"
+```
+
+如果你已经安装为 Codex 全局 Skill，可以从任意目录使用绝对路径执行：
+
+```bash
+node "$HOME/.codex/skills/codex-image-to-eagle/scripts/archive-codex-image-to-eagle.js" --latest --prompt "完整提示词"
+```
+
+它不依赖当前项目根目录，也不依赖 Codex 启动 session 的目录。图片默认从 `~/.codex/generated_images` 读取。
 
 ## 基础用法
 
@@ -70,18 +90,40 @@ node scripts/archive-codex-image-to-eagle.js --path "/absolute/path/image.png" -
 node scripts/archive-codex-image-to-eagle.js --latest --prompt "测试提示词" --dry-run
 ```
 
+## `--latest` 与 `--latest-session` 的选择规则
+
+- `--latest`：递归扫描图片目录，选择修改时间最新的一张图片。
+- `--latest-session`：扫描图片目录下的会话子目录，选择“最近有图片更新”的那个会话目录，并导入该目录下全部图片。
+- 默认图片目录：`~/.codex/generated_images`。
+- 当前 shell 所在目录不会影响这两个参数的选择结果。
+- 如果你要读取其他目录，用 `--image-dir "/path/to/generated_images"` 或环境变量 `CODEX_GENERATED_IMAGES_DIR` 指定。
+
 ## 指定 Eagle 文件夹
 
-按文件夹名称导入，若不存在会自动创建：
+默认会按图片本地修改日期归档到日期子目录：
+
+```text
+Codex 生成图/
+  2026-4-26/
+  2026-4-27/
+```
+
+按根文件夹名称导入，若不存在会自动创建根文件夹和日期子目录：
 
 ```bash
 node scripts/archive-codex-image-to-eagle.js --latest --folder-name "Codex 生成图" --prompt "完整提示词"
 ```
 
-按文件夹 ID 导入：
+按文件夹 ID 导入时，会把图片直接放入该 ID 对应的精确文件夹，不再自动创建日期子目录：
 
 ```bash
 node scripts/archive-codex-image-to-eagle.js --latest --folder-id "FOLDER_ID" --prompt "完整提示词"
+```
+
+如果你想恢复旧版扁平归档，不按日期分组：
+
+```bash
+node scripts/archive-codex-image-to-eagle.js --latest --no-date-subfolders --prompt "完整提示词"
 ```
 
 ## 自定义图片目录
@@ -130,6 +172,24 @@ Archive:
 - original_path: /path/to/original/image.png
 - archived_at: 2026-04-27T00:00:00.000Z
 ```
+
+## 已验证用法
+
+当前脚本已验证：
+
+- `--help`
+- `--latest --dry-run`
+- `--latest-session --dry-run`
+- `--path ... --dry-run`
+- `--prompt-file ... --dry-run`
+- `--prompt-stdin --dry-run`
+- `--folder-name ... --dry-run`
+- `--folder-id ... --dry-run`
+- `--no-date-subfolders --dry-run`
+- Eagle MCP 连通性
+- Eagle `item_add` 实际写入链路，已用于批量归档 Codex 生成图
+
+未建议随意反复测试实际写入命令，因为会在 Eagle 中产生重复素材。正式导入前建议先加 `--dry-run` 看清楚将要写入的图片、文件夹和注释。
 
 ## 常见问题
 
