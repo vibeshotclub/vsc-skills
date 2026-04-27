@@ -211,8 +211,9 @@ function statMtimeMs(filePath) {
 }
 
 async function resolveFoldersForImages(args, imagePaths, dryRun) {
-  if (args.folderId) {
-    return new Map(imagePaths.map((imagePath) => [imagePath, [args.folderId]]));
+  const fixedFolderId = args.folderId || process.env.EAGLE_CODEX_FOLDER_ID;
+  if (fixedFolderId) {
+    return new Map(imagePaths.map((imagePath) => [imagePath, [fixedFolderId]]));
   }
 
   const rootFolderName = args.folderName || DEFAULT_FOLDER_NAME;
@@ -233,7 +234,7 @@ async function resolveFoldersForImages(args, imagePaths, dryRun) {
 }
 
 function shouldUseDateSubfolders(args) {
-  return !args.noDateSubfolders && !args.folderId;
+  return !args.noDateSubfolders && !args.folderId && !process.env.EAGLE_CODEX_FOLDER_ID;
 }
 
 async function resolveFolderPath(names, args, dryRun) {
@@ -707,7 +708,7 @@ Options:
   --prompt-file <file>     Read prompt from a text file
   --prompt-stdin           Read prompt from stdin
   --folder-name <name>     Target Eagle folder name (default: Codex 生成图)
-  --folder-id <id>         Exact target Eagle folder ID; disables date subfolders
+  --folder-id <id>         Exact target Eagle folder ID; skips folder lookup and disables date subfolders
   --no-create-folder true  Do not create folder if --folder-name is missing
   --no-date-subfolders     Import into the root folder instead of Codex 生成图/YYYY-M-D
   --flat-folder            Alias for --no-date-subfolders
@@ -723,6 +724,7 @@ Options:
 
 Environment:
   CODEX_GENERATED_IMAGES_DIR  Override the default Codex generated image directory
+  EAGLE_CODEX_FOLDER_ID       Exact Eagle folder ID; skips folder_get and folder_create
   EAGLE_SERVER_URL            Override Eagle MCP server URL
   EAGLE_MCP_TRANSPORT         Set to stdio to use a stdio MCP server
   EAGLE_MCP_SERVER_NAME       Codex MCP server name for stdio config

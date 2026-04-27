@@ -73,6 +73,9 @@ node scripts/archive-codex-image-to-eagle.js --latest --prompt-file "/absolute/p
 node scripts/archive-codex-image-to-eagle.js --latest --folder-name "Codex 生成图" --prompt "PROMPT_TEXT"
 node scripts/archive-codex-image-to-eagle.js --latest --folder-id "FOLDER_ID" --prompt "PROMPT_TEXT"
 
+# Automation: fixed folder ID skips folder_get/folder_create permission prompts.
+EAGLE_CODEX_FOLDER_ID="FOLDER_ID" node scripts/archive-codex-image-to-eagle.js --latest --prompt "PROMPT_TEXT"
+
 # Disable date subfolders and import into the root folder directly.
 node scripts/archive-codex-image-to-eagle.js --latest --no-date-subfolders --prompt "PROMPT_TEXT"
 
