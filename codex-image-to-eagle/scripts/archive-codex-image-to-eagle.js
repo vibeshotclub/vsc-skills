@@ -12,6 +12,8 @@ const DEFAULT_MCP_SERVER_NAME = process.env.EAGLE_MCP_SERVER_NAME || 'eagle';
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 const DEFAULT_FOLDER_NAME = 'Codex 生成图';
 const DEFAULT_TAGS = ['Codex', 'AI生成', 'Prompt'];
+const FOLDER_LOCK_TIMEOUT_MS = Number(process.env.EAGLE_FOLDER_LOCK_TIMEOUT_MS || 15000);
+const FOLDER_LOCK_POLL_MS = Number(process.env.EAGLE_FOLDER_LOCK_POLL_MS || 150);
 let cliArgs = {};
 let stdioClientPromise = null;
 
@@ -216,10 +218,15 @@ async function resolveFoldersForImages(args, imagePaths, dryRun) {
     return new Map(imagePaths.map((imagePath) => [imagePath, [fixedFolderId]]));
   }
 
+  const rootFolderId = args.rootFolderId || process.env.EAGLE_CODEX_ROOT_FOLDER_ID;
   const rootFolderName = args.folderName || DEFAULT_FOLDER_NAME;
-  if (!rootFolderName) return new Map(imagePaths.map((imagePath) => [imagePath, []]));
+  if (!rootFolderId && !rootFolderName) return new Map(imagePaths.map((imagePath) => [imagePath, []]));
 
   if (!shouldUseDateSubfolders(args)) {
+    if (rootFolderId) {
+      return new Map(imagePaths.map((imagePath) => [imagePath, [rootFolderId]]));
+    }
+
     const folderIds = await resolveFolderPath([rootFolderName], args, dryRun);
     return new Map(imagePaths.map((imagePath) => [imagePath, folderIds]));
   }
@@ -227,7 +234,10 @@ async function resolveFoldersForImages(args, imagePaths, dryRun) {
   const uniqueDateNames = unique(imagePaths.map(dateFolderName));
   const idsByDateName = new Map();
   for (const dateName of uniqueDateNames) {
-    idsByDateName.set(dateName, await resolveFolderPath([rootFolderName, dateName], args, dryRun));
+    const folderIds = rootFolderId
+      ? await resolveFolderPath([dateName], args, dryRun, { parentId: rootFolderId })
+      : await resolveFolderPath([rootFolderName, dateName], args, dryRun);
+    idsByDateName.set(dateName, folderIds);
   }
 
   return new Map(imagePaths.map((imagePath) => [imagePath, idsByDateName.get(dateFolderName(imagePath)) || []]));
@@ -237,48 +247,104 @@ function shouldUseDateSubfolders(args) {
   return !args.noDateSubfolders && !args.folderId && !process.env.EAGLE_CODEX_FOLDER_ID;
 }
 
-async function resolveFolderPath(names, args, dryRun) {
+async function resolveFolderPath(names, args, dryRun, options = {}) {
   if (dryRun) return [`folder-path:${names.join('/')}`];
 
-  const existing = await callTool('folder_get', {
-    getAllHierarchy: true,
-    fullDetails: true,
-  });
+  const lockKey = ['eagle-folder', options.parentId || 'root', ...names].join('/');
+  return withFolderLock(lockKey, async () => {
+    const existing = await callTool('folder_get', {
+      getAllHierarchy: true,
+      fullDetails: true,
+    });
 
-  const folders = flattenFolders(existing.data || []);
-  let parentId = null;
-  let current = null;
+    const folders = flattenFolders(existing.data || []);
+    let parentId = options.parentId || null;
+    let current = null;
 
-  for (const name of names) {
-    current = folders.find((folder) => folder.name === name && normalizeParent(folder.parent) === normalizeParent(parentId));
-    if (!current) {
-      if (args.noCreateFolder) return [];
+    for (const name of names) {
+      current = findFolderByNameAndParent(folders, name, parentId);
+      if (!current) {
+        if (args.noCreateFolder) return [];
 
-      const created = await callTool('folder_create', {
-        parentId: parentId || undefined,
-        folders: [
-          {
-            name,
-            parentId: parentId || undefined,
-            iconColor: parentId ? 'aqua' : 'blue',
-            description: parentId ? 'Codex generated images grouped by local generation date.' : 'Codex generated images archived with prompts.',
-          },
-        ],
-      });
+        await callTool('folder_create', {
+          parentId: parentId || undefined,
+          folders: [
+            {
+              name,
+              parentId: parentId || undefined,
+              iconColor: parentId ? 'aqua' : 'blue',
+              description: parentId ? 'Codex generated images grouped by local generation date.' : 'Codex generated images archived with prompts.',
+            },
+          ],
+        });
 
-      const createdFolders = flattenFolders(created.data || []);
-      current = createdFolders.find((folder) => folder.name === name) || createdFolders[0];
-      if (!current || !current.id) {
-        throw new Error(`Folder was created but no folder ID was returned: ${JSON.stringify(created)}`);
+        const refreshed = await callTool('folder_get', {
+          getAllHierarchy: true,
+          fullDetails: true,
+        });
+        const refreshedFolders = flattenFolders(refreshed.data || []);
+        current = findFolderByNameAndParent(refreshedFolders, name, parentId);
+        if (!current || !current.id) {
+          throw new Error(`Folder was created but could not be resolved under parent ${parentId || 'root'}: ${name}`);
+        }
+
+        folders.length = 0;
+        folders.push(...refreshedFolders);
       }
 
-      folders.push(current);
+      parentId = current.id;
     }
 
-    parentId = current.id;
+    return current ? [current.id] : [];
+  });
+}
+
+function findFolderByNameAndParent(folders, name, parentId) {
+  const matches = folders
+    .filter((folder) => folder.name === name && normalizeParent(getFolderParentId(folder)) === normalizeParent(parentId))
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+  return matches[0] || null;
+}
+
+async function withFolderLock(key, fn) {
+  const lockDir = path.join(os.tmpdir(), `codex-image-to-eagle-${hashKey(key)}.lock`);
+  const start = Date.now();
+
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir);
+      break;
+    } catch (error) {
+      if (error && error.code !== 'EEXIST') throw error;
+      if (Date.now() - start > FOLDER_LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for Eagle folder lock: ${key}`);
+      }
+      await sleep(FOLDER_LOCK_POLL_MS);
+    }
   }
 
-  return current ? [current.id] : [];
+  try {
+    return await fn();
+  } finally {
+    fs.rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+
+function hashKey(value) {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getFolderParentId(folder) {
+  if (!folder || typeof folder !== 'object') return null;
+  return folder.parent ?? folder.parentId ?? folder._parentId ?? null;
 }
 
 function normalizeParent(value) {
@@ -290,16 +356,20 @@ function dateFolderName(imagePath) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-function flattenFolders(value) {
+function flattenFolders(value, parentId = null) {
   const input = Array.isArray(value) ? value : [value];
   const results = [];
 
   for (const item of input) {
     if (!item || typeof item !== 'object') continue;
-    results.push(item);
+    const current = {
+      ...item,
+      _parentId: item.parent ?? item.parentId ?? parentId ?? null,
+    };
+    results.push(current);
 
     if (Array.isArray(item.children)) {
-      results.push(...flattenFolders(item.children));
+      results.push(...flattenFolders(item.children, item.id || null));
     }
   }
 
@@ -709,6 +779,7 @@ Options:
   --prompt-stdin           Read prompt from stdin
   --folder-name <name>     Target Eagle folder name (default: Codex 生成图)
   --folder-id <id>         Exact target Eagle folder ID; skips folder lookup and disables date subfolders
+  --root-folder-id <id>    Existing Eagle root folder ID; keeps date subfolders under this root
   --no-create-folder true  Do not create folder if --folder-name is missing
   --no-date-subfolders     Import into the root folder instead of Codex 生成图/YYYY-M-D
   --flat-folder            Alias for --no-date-subfolders
@@ -725,6 +796,7 @@ Options:
 Environment:
   CODEX_GENERATED_IMAGES_DIR  Override the default Codex generated image directory
   EAGLE_CODEX_FOLDER_ID       Exact Eagle folder ID; skips folder_get and folder_create
+  EAGLE_CODEX_ROOT_FOLDER_ID  Existing Eagle root folder ID; creates/reuses date subfolders below it
   EAGLE_SERVER_URL            Override Eagle MCP server URL
   EAGLE_MCP_TRANSPORT         Set to stdio to use a stdio MCP server
   EAGLE_MCP_SERVER_NAME       Codex MCP server name for stdio config
