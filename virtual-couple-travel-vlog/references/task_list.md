@@ -12,7 +12,7 @@ Timing:
 
 Actions:
 
-- Run `scripts/check-tools.ps1 -ShowInstallHints`.
+- Run `python scripts/check-tools.py --show-install-hints`.
 - Required dependencies for automated local workflow:
   - Python 3.10+ or Python Launcher.
   - Python Pillow module for local 4x4 to 2x2 splitting.
@@ -38,17 +38,17 @@ Inputs:
 
 - Theme and destination, e.g. "young Japanese couple in Paris."
 - Couple ethnicity/nationality, age range, wardrobe direction, season, and mood if provided.
-- Preferred output title. If missing, create a concise English folder title.
+- Preferred output root and project title. If the output root is missing, ask the user to choose one before creating assets. If the title is missing, create a concise English folder title.
 
 Actions:
 
-- Create `E:/Output/<Project Title>/`.
+- Create `<Output Root>/<Project Title>/`.
 - Create subfolders: `prompts`, `images`, `videos`, `audio`.
 - Write `brief.md`.
 
 Fallback:
 
-- If `E:/Output` is unavailable, ask the user for an alternate folder.
+- If the selected output root is unavailable, ask the user for an alternate folder.
 
 ## Task 1 - Story and Prompt Planning
 
@@ -98,8 +98,7 @@ Preferred order:
 
 1. If the image is already in Canva or has a public HTTPS URL, try Canva crop/export once.
 2. If Canva cannot access the local file, use `scripts/split-grid.py`.
-3. If the Python splitter fails, try `scripts/split-grid.ps1`.
-4. If local splitting fails, write manual crop instructions and ask the user before switching to direct four 2x2 generation.
+3. If local splitting fails, write manual crop instructions and ask the user before switching to direct four 2x2 generation.
 
 Acceptance:
 
@@ -146,7 +145,7 @@ Timing:
 
 Actions:
 
-- Run `scripts/check-video-providers.ps1`.
+- Run `python scripts/check-video-providers.py`.
 - If a connected provider is found, ask whether the user wants to use that provider for automation.
 - If no provider is found, ask which platform the user wants to use and provide manual instructions for that platform.
 - Always export the handoff package:
@@ -263,7 +262,7 @@ Suggested subagent: independent reviewer.
 
 Check:
 
-- All outputs are inside `E:/Output/<Project Title>/`.
+- All outputs are inside `<Output Root>/<Project Title>/`.
 - Four clips exist or blockers are documented.
 - The final video exists or manual assembly handoff exists.
 - `audio/music_prompt_zh.txt` exists and the user was reminded to generate soundtrack manually with their preferred tool.

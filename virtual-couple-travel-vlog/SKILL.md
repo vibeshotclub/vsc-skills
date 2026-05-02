@@ -1,6 +1,6 @@
 ---
 name: virtual-couple-travel-vlog
-description: Create virtual couple travel vlog workflows and assets from a user-provided theme, destination, couple profile, or reference images. Use when Codex needs to generate nostalgic iPhone travel photo grids, split 4x4 grids into four 2x2 memory sheets, create male/female character reference cards, generate Topview Omni Reference video clips, write manual Chinese music prompts, assemble final vlog videos, and save all assets under E:/Output in a dedicated project folder.
+description: Create virtual couple travel vlog workflows and assets from a user-provided theme, destination, couple profile, output folder, or reference images. Use when Codex needs to generate nostalgic iPhone travel photo grids, split 4x4 grids into four 2x2 memory sheets, create male/female character reference cards, generate Topview Omni Reference video clips, write manual Chinese music prompts, assemble final vlog videos, and save all assets in a user-selected dedicated project folder.
 ---
 
 # Virtual Couple Travel Vlog
@@ -11,7 +11,8 @@ Build a repeatable "virtual couple travel vlog" asset pipeline from a short them
 
 - Address the user as the Chinese honorific for boss in Chinese replies.
 - The skill files may be written in ASCII for portability. This does not restrict the user's input language; accept Chinese, English, French, Spanish, and mixed-language project briefs normally.
-- Save every generated asset under `E:/Output/<Project Title>/`.
+- Save every generated asset under a user-selected output root as `<Output Root>/<Project Title>/`.
+- If the user gives an output folder, use it. If the user has a local default output root in their environment or project instructions, offer it as the default. Otherwise ask the user to choose an output root before creating project assets. Do not hard-code a drive letter or OS-specific output path.
 - Never delete files. If cleanup is needed, ask the user for explicit second confirmation first.
 - Try each blocked automation step up to 3 times. If it still fails, stop that step, explain the blocker plainly, and provide the best manual handoff asset or prompt.
 - Keep the story coherent across all four 2x2 grids: same couple, same trip, same wardrobe logic, progressive travel moments.
@@ -40,7 +41,7 @@ Typical task ownership:
 
 ### First-run dependency check
 
-When a user installs or runs this skill on a new machine, run [scripts/check-tools.ps1](scripts/check-tools.ps1) before the workflow starts.
+When a user installs or runs this skill on a new machine, run [scripts/check-tools.py](scripts/check-tools.py) before the workflow starts.
 
 - Required for the automated local workflow: Python, Pillow, FFmpeg, FFprobe, and Remotion readiness checks for richer editing.
 - Optional: Topview skill, Node, npm, or other provider-specific CLIs.
@@ -72,7 +73,7 @@ Try Canva only when one of these is true:
 - The image is available as a public HTTPS URL.
 - The user explicitly asks to use Canva manually.
 
-Do not spend more than one short attempt on Canva for local image cropping. If Canva cannot directly access the local file, use [scripts/split-grid.py](scripts/split-grid.py), with [scripts/split-grid.ps1](scripts/split-grid.ps1) as a fallback. Do not fall back to independent 2x2 text-to-image generation unless the user accepts the identity drift risk or a locked reference image exists.
+Do not spend more than one short attempt on Canva for local image cropping. If Canva cannot directly access the local file, use [scripts/split-grid.py](scripts/split-grid.py). Do not fall back to independent 2x2 text-to-image generation unless the user accepts the identity drift risk or a locked reference image exists.
 
 ### Character card generation
 
@@ -89,7 +90,7 @@ Create character cards automatically after the 4x4 grid is generated and split i
 
 ### Topview video generation
 
-After the four 2x2 sheets, character cards, and video prompts are ready, run [scripts/check-video-providers.ps1](scripts/check-video-providers.ps1).
+After the four 2x2 sheets, character cards, and video prompts are ready, run [scripts/check-video-providers.py](scripts/check-video-providers.py).
 
 - If Topview is connected and the user wants Topview automation, use the Topview skill and its scripts.
 - If another video generation API is connected, adapt the same exported assets and prompts to that provider's supported reference-image workflow.
@@ -128,7 +129,7 @@ If the user later provides a generated music file, save or reference it under `a
 
 ### Video assembly
 
-Prefer FFmpeg for simple concatenation and Remotion for richer editing, transitions, timing adjustments, captions, overlays, or music-aware assembly. Use [scripts/assemble-vlog.ps1](scripts/assemble-vlog.ps1) when FFmpeg is enough. When Remotion is requested or useful, follow the Remotion plugin best practices and scaffold a small Remotion project instead of hand-writing ad hoc video code. If neither FFmpeg nor Remotion is usable after 3 attempts, provide the ordered clip list and any user-provided music file for manual assembly in Clipchamp, CapCut, Premiere, or another editor.
+Prefer FFmpeg for simple concatenation and Remotion for richer editing, transitions, timing adjustments, captions, overlays, or music-aware assembly. Use [scripts/assemble-vlog.py](scripts/assemble-vlog.py) when FFmpeg is enough. When Remotion is requested or useful, follow the Remotion plugin best practices and scaffold a small Remotion project instead of hand-writing ad hoc video code. If neither FFmpeg nor Remotion is usable after 3 attempts, provide the ordered clip list and any user-provided music file for manual assembly in Clipchamp, CapCut, Premiere, or another editor.
 
 ## Required References
 

@@ -10,7 +10,7 @@ The skill generates a consistent travel-memory asset package: 4x4 iPhone-style p
 
 ## What It Does
 
-1. Creates a dedicated project folder under `E:/Output/<Project Title>/`.
+1. Creates a dedicated project folder under a user-selected output root.
 2. Generates one 4x4 nostalgic iPhone travel photo grid for identity consistency.
 3. Splits the 4x4 grid into four 2x2 memory sheets.
 4. Generates clean male and female character reference cards.
@@ -26,7 +26,7 @@ The skill generates a consistent travel-memory asset package: 4x4 iPhone-style p
 Each run creates:
 
 ```text
-E:/Output/<Project Title>/
+<Output Root>/<Project Title>/
   brief.md
   generation_report.md
   qa.md
@@ -69,10 +69,10 @@ The automated local workflow expects:
 - Remotion plugin/skill for richer editing paths
 - Optional: Topview skill for automated image and video generation
 
-Run the dependency checker:
+Run the cross-platform dependency checker:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-folder>/scripts/check-tools.ps1" -ShowInstallHints
+```bash
+python "<skill-folder>/scripts/check-tools.py" --show-install-hints
 ```
 
 If required dependencies are missing, ask the user before installing them.
@@ -82,7 +82,14 @@ If required dependencies are missing, ask the user before installing them.
 Ask Codex to use the skill and provide a theme:
 
 ```text
-[$virtual-couple-travel-vlog](C:\Users\Valentin.VALENTIN-ALIENW\.agents\skills\virtual-couple-travel-vlog\SKILL.md) 一对中国情侣在巴塞罗那的旅行vlog
+[$virtual-couple-travel-vlog](<path-to-skill>/SKILL.md) 一对中国情侣在巴塞罗那的旅行vlog
+```
+
+Also provide an output root, or let the skill ask where to create the project folder. Examples:
+
+```text
+Use ~/Movies/VlogOutputs as the output root.
+Use D:/AI/VlogOutputs as the output root.
 ```
 
 The skill will:
@@ -173,7 +180,7 @@ The skill keeps FFmpeg as the default for simple clip joining and uses Remotion 
 
 ## Safety Rules
 
-- All generated project assets go under `E:/Output/<Project Title>/`.
+- All generated project assets go under the output root selected by the user.
 - The workflow does not delete files. If cleanup is needed, ask the user for explicit second confirmation.
 - Do not install third-party skills or packages without first doing an audit and asking the user.
 - Do not silently spend extra Quick Generate credits.

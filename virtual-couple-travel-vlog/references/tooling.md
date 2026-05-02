@@ -2,7 +2,7 @@
 
 ## Dependency Check
 
-Use `scripts/check-tools.ps1` from this skill folder before running a full workflow on a new machine. It checks for common local tools without changing files.
+Use `scripts/check-tools.py` from this skill folder before running a full workflow on a new machine. It checks for common local tools without changing files and works on macOS, Windows, and Linux.
 
 Expected tools:
 
@@ -17,16 +17,17 @@ Expected tools:
 
 Run:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<THIS_SKILL>/scripts/check-tools.ps1" -ShowInstallHints
+```bash
+python "<THIS_SKILL>/scripts/check-tools.py" --show-install-hints
 ```
 
 If required dependencies are missing, ask the user before installing. Useful install hints:
 
-```powershell
-py -m pip install Pillow
-winget install --id Gyan.FFmpeg -e
+```bash
+python -m pip install Pillow
 ```
+
+Install FFmpeg with the user's OS package manager, for example Homebrew on macOS, winget/choco on Windows, or apt/dnf/pacman on Linux.
 
 Do not install optional provider CLIs unless the user selects that provider and approves the installation.
 
@@ -54,71 +55,39 @@ Use the Topview skill's scripts, not raw HTTP calls.
 
 For image generation:
 
-```powershell
-python "C:/Users/Valentin.VALENTIN-ALIENW/.agents/skills/topview/scripts/ai_image.py" run `
-  --type text2image `
-  --model "Nano Banana 2" `
-  --prompt "<PROMPT>" `
-  --aspect-ratio "1:1" `
-  --resolution "2K" `
-  --output-dir "<PROJECT>/images"
+```bash
+python "<TOPVIEW_SKILL>/scripts/ai_image.py" run --type text2image --model "Nano Banana 2" --prompt "<PROMPT>" --aspect-ratio "1:1" --resolution "2K" --output-dir "<PROJECT>/images"
 ```
 
 For character cards:
 
-```powershell
-python "C:/Users/Valentin.VALENTIN-ALIENW/.agents/skills/topview/scripts/ai_image.py" run `
-  --type image_edit `
-  --model "Nano Banana 2" `
-  --prompt "<CHARACTER_CARD_PROMPT>" `
-  --aspect-ratio "1:1" `
-  --resolution "2K" `
-  --input-images "<SHEET_1>" "<SHEET_2>" `
-  --output-dir "<PROJECT>/images"
+```bash
+python "<TOPVIEW_SKILL>/scripts/ai_image.py" run --type image_edit --model "Nano Banana 2" --prompt "<CHARACTER_CARD_PROMPT>" --aspect-ratio "1:1" --resolution "2K" --input-images "<SHEET_1>" "<SHEET_2>" --output-dir "<PROJECT>/images"
 ```
 
 For Omni Reference video:
 
-```powershell
-python "<THIS_SKILL>/scripts/run-topview-omni.py" `
-  --prompt-file "<PROJECT>/prompts/video_clip_01.txt" `
-  --sheet "<PROJECT>/images/memory_sheet_01.png" `
-  --male-card "<PROJECT>/images/character_male.png" `
-  --female-card "<PROJECT>/images/character_female.png" `
-  --aspect-ratio "9:16" `
-  --resolution 720 `
-  --duration 15 `
-  --count 1 `
-  --sound off `
-  --board-id "<TOPVIEW_BOARD_ID>" `
-  --output-dir "<PROJECT>/videos"
+```bash
+python "<THIS_SKILL>/scripts/run-topview-omni.py" --prompt-file "<PROJECT>/prompts/video_clip_01.txt" --sheet "<PROJECT>/images/memory_sheet_01.png" --male-card "<PROJECT>/images/character_male.png" --female-card "<PROJECT>/images/character_female.png" --aspect-ratio "9:16" --resolution 720 --duration 15 --count 1 --sound off --board-id "<TOPVIEW_BOARD_ID>" --output-dir "<PROJECT>/videos"
 ```
 
-Use the wrapper script on Windows because Windows PowerShell can strip JSON quotes from `--input-images` when calling `video_gen.py` directly.
+Use the wrapper script because shell quoting differs across macOS, Windows, and Linux. The wrapper passes reference-image JSON safely to `video_gen.py`.
 
 Before video submission, estimate cost when possible:
 
-```powershell
-python "C:/Users/Valentin.VALENTIN-ALIENW/.agents/skills/topview/scripts/video_gen.py" estimate-cost `
-  --model "Standard" `
-  --resolution 720 `
-  --duration 15 `
-  --sound off `
-  --count 4
+```bash
+python "<TOPVIEW_SKILL>/scripts/video_gen.py" estimate-cost --model "Standard" --resolution 720 --duration 15 --sound off --count 4
 ```
 
 If the estimate command fails or differs from observed charging, tell the user the estimate is uncertain. In the Shanghai Standard Omni trial, four 15-second 720p clips were charged as 18 credits per clip, 72 credits total. Treat that as observed history, not a guaranteed price.
 
 For splitting a 4x4 grid into four 2x2 sheets, prefer the Python/Pillow splitter:
 
-```powershell
-python "<THIS_SKILL>/scripts/split-grid.py" `
-  --input-image "<PROJECT>/images/memory_grid_4x4.png" `
-  --output-dir "<PROJECT>/images" `
-  --prefix "memory_sheet"
+```bash
+python "<THIS_SKILL>/scripts/split-grid.py" --input-image "<PROJECT>/images/memory_grid_4x4.png" --output-dir "<PROJECT>/images" --prefix "memory_sheet"
 ```
 
-Use `scripts/split-grid.ps1` only as a fallback. Some Topview PNG downloads may fail in Windows System.Drawing while Pillow decodes them correctly.
+Do not use an OS-specific crop script by default. If Pillow cannot decode the image, regenerate or convert the image with a cross-platform image tool, then rerun the Python splitter.
 
 Video quality rule:
 
@@ -167,8 +136,8 @@ Before I submit the four Topview video clips, here are the settings: Omni Refere
 
 After the 2x2 sheets, character cards, and video prompts are prepared, check whether a video generation provider is connected:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<THIS_SKILL>/scripts/check-video-providers.ps1"
+```bash
+python "<THIS_SKILL>/scripts/check-video-providers.py"
 ```
 
 The checker looks for:
@@ -201,7 +170,11 @@ Canva plugin is useful for design assets, but local generated PNG files are not 
 
 ## FFmpeg Assembly
 
-Use `scripts/assemble-vlog.ps1` for same-codec clips. If clips differ in codec/resolution/framerate, the script re-encodes to a web-safe MP4.
+Use `scripts/assemble-vlog.py` for simple clip joining. It first tries same-codec concatenation; if clips differ in codec/resolution/framerate, it re-encodes to a web-safe MP4.
+
+```bash
+python "<THIS_SKILL>/scripts/assemble-vlog.py" --clips "<PROJECT>/videos/clip_01.mp4" "<PROJECT>/videos/clip_02.mp4" "<PROJECT>/videos/clip_03.mp4" "<PROJECT>/videos/clip_04.mp4" --output "<PROJECT>/videos/final_vlog.mp4"
+```
 
 ## Remotion Assembly
 
