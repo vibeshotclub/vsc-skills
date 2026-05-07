@@ -15,12 +15,12 @@
 1. 让使用者选择输出根目录，并在其中创建独立项目文件夹。
 2. 根据主题生成一张 4x4 怀旧 iPhone 旅行照片墙，用单次生成尽量锁定同一对情侣的身份。
 3. 自动把 4x4 图切成四张 2x2 记忆图，分别作为四段视频的记忆参考图。
-4. 自动根据 4x4 / 2x2 参考图生成男女角色卡，包含白底、摄影棚灯光、统一服装、三视图和头像角度。
+4. 自动根据 4x4 / 2x2 参考图生成男女角色卡，固定为 1:1 七面板版式：上排四个全身视图，下排三个头像视图。
 5. 为四张 2x2 图分别输出视频生成提示词。
 6. 检查本机是否有可用的视频生成平台 API 或相关 Skill。
-7. 默认支持 Topview Omni Reference 自动化路径；也可以和 AI 沟通接入其他平台 API，或手动复制提示词到视频生成平台。
+7. 角色卡完成后，检查 Topview、Seedance API、Krea、Lovart、LibTV 等视频生成路径；如果没有连接 API，则输出手动平台使用说明。
 8. 生成 `audio/music_prompt_zh.txt`，供使用者到音乐创作平台手动生成配乐。
-9. 使用 FFmpeg 做简单视频拼接；需要转场、字幕、音乐节奏或可复用 React composition 时，使用 Remotion 插件能力。
+9. 四段视频生成后，先询问使用者选择 FFmpeg 简单拼接，还是用 Remotion / HyperFrames 做转场、裁剪、字幕、light leaks、节奏化剪辑和可复用 composition。
 10. 输出 QA 记录和生成报告。
 
 ## 输出结构
@@ -69,7 +69,8 @@
 - FFmpeg 和 FFprobe，用于简单视频拼接
 - Node、npm、npx，用于 Remotion 编辑路径
 - Remotion plugin / skill，用于更复杂的视频编辑
-- 可选：Topview skill，用于自动图片和视频生成
+- 可选：HyperFrames plugin / skill，仅用于四段视频已经生成后的 HTML/GSAP 剪辑、字幕、转场和可复用 composition
+- 可选：Topview skill，用于自动视频生成；图片生成可按当前工作流选择合适模型，但角色卡默认使用 Codex Image Gen / gpt-image-2
 
 运行跨平台依赖检查：
 
@@ -103,8 +104,9 @@ python "<skill-folder>/scripts/check-tools.py" --show-install-hints
 3. 生成一张 4x4 旅行照片墙。
 4. 自动切成四张 2x2 记忆图。
 5. 自动生成男女角色卡。
-6. 检查可用的视频生成平台。
+6. 检查 Topview、Seedance API、Krea、Lovart、LibTV 或其他视频生成平台路径。
 7. 根据平台情况自动提交视频任务，或提供手动生成指导。
+8. 四段视频完成后，再询问使用 FFmpeg、Remotion 还是 HyperFrames 做最终剪辑。
 
 ## 4x4 到 2x2 的身份一致性策略
 
@@ -128,15 +130,59 @@ python "<skill-folder>/scripts/check-tools.py" --show-install-hints
 - 只出现同一个角色
 - 白底摄影棚灯光
 - 统一服装
-- 全身正面、侧面、背面
-- 多个头像角度和表情
-- 同比例、同地面线、正交视角
-- 不要文字、logo、水印
+- 上排固定四个全身视图：正面、左侧面、右侧面、背面
+- 下排固定三个头像：正面微笑、左侧面严肃、右侧面严肃
+- 同比例、同地面线、同头高、同脚底线、正交视角
+- 不要文字、标签、logo、水印、UI
 - 不要旅行照片残影、背景碎片、拼贴残留或其他人物
 
-如果三视图角色卡多次失败，工作流会退回到更干净的单人身份参考图，避免继续浪费生成额度。
+如果七面板角色卡多次失败，工作流会退回到更干净的单人身份参考图，避免继续浪费生成额度。
 
 ## 视频生成平台
+
+### HyperFrames 剪辑路径
+
+HyperFrames 不再作为四段源视频的生成 provider 使用。原因是它更适合 HTML/GSAP composition 和剪辑包装，而不是替代 Topview、Seedance、Krea、Lovart、LibTV 这类真正的图生视频平台生成四段 photoreal 短片。
+
+当前规则是：先用 Topview、其他视频生成 API 或手动平台生成四段 15 秒源视频；四段视频已经存在之后，再选择是否用 HyperFrames 做最终剪辑。
+
+HyperFrames 适合：
+
+- HTML/GSAP 视频 composition
+- 转场
+- 字幕
+- light leaks 和叠加层
+- 节奏化剪辑
+- 可复用的视频结构
+
+如果只是简单拼接，优先用 FFmpeg。如果需要更有设计感的剪辑、字幕、转场、light leaks 或后续可复用的 composition，再选择 Remotion 或 HyperFrames。
+
+### HyperFrames Chrome 运行技巧
+
+在 Windows 上，HyperFrames 有时会提示 Chrome 可用，但实际 `inspect` 或 `render` 时找不到它期望的 `chrome-headless-shell.exe`。上次验证时可用的修复方法是：
+
+1. 找到 HyperFrames 报错里提示的浏览器缓存目录，通常类似：
+
+```text
+%USERPROFILE%\.cache\hyperframes\chrome\chrome-headless-shell\<platform-and-version>\
+```
+
+2. 找到本机 Chrome 安装目录，常见位置是：
+
+```text
+C:\Program Files\Google\Chrome\Application
+```
+
+3. 把 Chrome 应用文件复制到 HyperFrames 期望的缓存目录里。如果 HyperFrames 明确寻找 `chrome-headless-shell.exe`，可以在缓存目录中复制一份 `chrome.exe`，并命名为 `chrome-headless-shell.exe`。
+
+4. 重新运行：
+
+```bash
+npx hyperframes inspect . --samples 8 --json
+npx hyperframes render . --output "<项目文件夹>/videos/final_vlog.mp4"
+```
+
+这个方法只是运行环境修复，不是视频生成方案。不要删除 HyperFrames 或 Chrome 缓存，除非使用者明确二次确认。
 
 ### Topview 自动化路径
 
@@ -204,16 +250,16 @@ audio/music_prompt_zh.txt
 - 可选地嵌入使用者提供的音乐文件
 - 输出 `videos/final_vlog.mp4`
 
-需要更复杂编辑时使用 Remotion：
+需要更复杂编辑时，可以选择 Remotion 或 HyperFrames：
 
 - 转场
-- 修剪
+- 修剪 / 裁剪
 - 字幕
-- 叠加层
+- 叠加层和 light leaks
 - 根据音乐节奏调整剪辑点
-- 可复用的 React composition
+- 可复用的 React composition 或 HyperFrames HTML/GSAP composition
 
-默认原则：简单直连用 FFmpeg；需要设计感和可复用结构时用 Remotion。
+默认原则：简单直连用 FFmpeg；需要设计感、节奏化剪辑和可复用结构时，询问使用者选择 Remotion 还是 HyperFrames。
 
 ## 安全规则
 
