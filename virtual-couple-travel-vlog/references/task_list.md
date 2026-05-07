@@ -20,6 +20,7 @@ Actions:
   - Node/npm/npx and Remotion plugin readiness for Remotion-based editing.
 - Optional dependencies:
   - Topview skill for automated Topview image/video generation.
+  - HyperFrames plugin/skill for richer editing after the four source clips already exist.
   - Node/npm or platform-specific CLIs only when the selected provider needs them.
 - If required dependencies are missing, ask the user whether to install them before running install commands.
 - If optional video providers are missing, do not stop the workflow; prepare assets and prompts for manual platform use.
@@ -90,15 +91,15 @@ Attempt limit:
 
 - 3 attempts total for the chosen image generation route before asking the user whether to adjust style, model, or proceed manually.
 
-## Task 3 - Canva or Local 2x2 Splitting
+## Task 3 - Local 2x2 Splitting
 
 Suggested subagent: asset operator.
 
-Preferred order:
+Preferred route:
 
-1. If the image is already in Canva or has a public HTTPS URL, try Canva crop/export once.
-2. If Canva cannot access the local file, use `scripts/split-grid.py`.
-3. If local splitting fails, write manual crop instructions and ask the user before switching to direct four 2x2 generation.
+1. Use `scripts/split-grid.py` to split the approved 4x4 source into four 2x2 memory sheets.
+2. If local splitting fails, fix the image/Pillow issue and retry up to 3 times.
+3. If local splitting still fails, write manual crop instructions and ask the user before switching to direct four 2x2 generation.
 
 Acceptance:
 
@@ -124,12 +125,15 @@ Rules:
 - White background.
 - Studio photography lighting.
 - No text, labels, logos, watermarks, measurement lines, or UI.
-- Include full-body front, side, back views and multiple head angles/expressions.
-- Use orthographic turnaround language: same character, same scale, same ground line, same proportions, front view, side view, back view, no perspective scene.
+- Use the fixed seven-panel technical reference format for both male and female cards.
+- Top row: four full-body standing views in this exact order: front, left profile facing screen left, right profile facing screen right, back.
+- Bottom row: three close-up head portraits in this exact order: front with a small natural smile, left profile serious, right profile serious.
+- Use orthographic turnaround language: same character, same scale, same ground line, same proportions, consistent head height, consistent foot baseline, consistent facial scale, no perspective scene.
 - Preserve the couple's age, face structure, hair, clothing style, and ordinary travel vibe.
 - Keep one unified wardrobe per character card. Do not allow multiple outfits inside one card unless the user explicitly asks for a variant sheet.
 - Reject any card with reference photo remnants, scenic overlays, ghosted background memories, inset travel photos, grid/collage artifacts, or other people.
-- For the female card, follow the validated `character_female_v3` pattern: extract the woman's identity only, enforce a single wardrobe lock, use pure white studio background, and explicitly negate original reference image fragments.
+- Use the clean `character_male_summer` style as the visual target: 1:1 sheet, top full-body row, bottom portrait row, pure white background, no labels, no scenery, clean panel separation.
+- For the female card, use the same fixed seven-panel format as the male card. Extract the woman's identity only, enforce a single wardrobe lock, use pure white studio background, and explicitly negate original reference image fragments.
 - If the character card introduces a different person or mixes multiple identities, discard it and regenerate from the approved 4x4 source; do not use it for video.
 - Do not ask the user before generating the first character cards. Run them directly after splitting.
 - If one card has a stable identity but visible scenery remnants, run the cleanup prompt once or twice.
@@ -148,6 +152,7 @@ Actions:
 - Run `python scripts/check-video-providers.py`.
 - If a connected provider is found, ask whether the user wants to use that provider for automation.
 - If no provider is found, ask which platform the user wants to use and provide manual instructions for that platform.
+- Do not offer HyperFrames as a source-clip generation provider. HyperFrames is reserved for editing after the four source clips already exist.
 - Always export the handoff package:
   - `images/memory_sheet_01.png` through `images/memory_sheet_04.png`
   - `images/character_male.png`
@@ -239,16 +244,21 @@ Fallback:
 
 - If the user does not want music yet, continue with silent video assembly and leave `audio/music_prompt_zh.txt` as the handoff artifact.
 
-## Task 9 - Assembly
+## Task 9 - Assembly Decision and Assembly
 
 Suggested subagent: video editor.
 
 Actions:
 
+- After four video clips exist, ask the user which edit route they want before assembling:
+  - FFmpeg for direct simple concatenation and optional music mux.
+  - Remotion for transitions, trims, captions, overlays, music-aware timing, or reusable React composition.
+  - HyperFrames for transitions, crops/trims, captions, light leaks, rhythm-aware edits, overlays, or reusable HTML/GSAP composition over existing clips.
 - Join the four clips in order.
 - Use FFmpeg for direct concatenation, codec-safe joining, and simple music embedding.
 - Use Remotion when the user wants richer editing: timed transitions, trims, light leaks, captions, animated overlays, music-aware timing, or repeatable React-based composition.
 - When using Remotion, follow the `remotion-best-practices` skill. Scaffold a minimal Remotion project if one does not exist, import the four clips as assets, define a 9:16 720x1280 composition around 60 seconds, and render the final MP4.
+- Use HyperFrames only after the four source clips exist, when the user wants HTML-based composition, transitions, crops/trims, captions, light leaks, rhythm-aware edits, overlays, or a reusable HyperFrames composition. Follow the `hyperframes` and `hyperframes-cli` skills, use a 9:16 composition around 60 seconds, run `npx hyperframes lint`, `npx hyperframes inspect`, and render with `npx hyperframes render`.
 - Add music only if the user provides a generated music file and asks to embed it.
 - Export `videos/final_vlog.mp4`.
 

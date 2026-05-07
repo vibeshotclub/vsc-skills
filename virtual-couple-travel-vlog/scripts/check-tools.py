@@ -55,6 +55,16 @@ def find_remotion_skill():
     return first_existing(str(path) for path in candidates)
 
 
+def find_hyperframes_skill():
+    home = Path.home()
+    candidates = [
+        home / ".codex" / "plugins" / "cache" / "openai-curated" / "hyperframes",
+        home / ".codex" / "skills" / "hyperframes",
+        home / ".agents" / "skills" / "hyperframes",
+    ]
+    return first_existing(str(path) for path in candidates)
+
+
 def print_table(results):
     headers = ["Tool", "Required", "Found", "Path"]
     rows = [
@@ -84,6 +94,7 @@ def main():
 
     topview_path = find_topview(args.topview_skill)
     remotion_skill_path = find_remotion_skill()
+    hyperframes_skill_path = find_hyperframes_skill()
 
     results = [
         command_result("python", True, "Install Python 3.10+ from python.org or your OS package manager."),
@@ -101,6 +112,14 @@ def main():
             "path": remotion_skill_path,
             "install_hint": "Install or enable the Remotion plugin/skill before using Remotion assembly.",
         },
+        {
+            "tool": "hyperframes-plugin",
+            "required": False,
+            "found": bool(hyperframes_skill_path),
+            "path": hyperframes_skill_path,
+            "install_hint": "Optional. Install or enable the HyperFrames plugin/skill for richer HTML-based editing after source clips already exist.",
+        },
+        command_result("hyperframes", False, "Optional CLI. If missing, use npx hyperframes inside a HyperFrames project."),
         {
             "tool": "topview-skill",
             "required": False,

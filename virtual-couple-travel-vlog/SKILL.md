@@ -28,14 +28,15 @@ Typical task ownership:
 1. Intake and project folder setup.
 2. Prompt planning for a 4-part travel memory sequence.
 3. Image generation: one 4x4 contact sheet is the default primary route.
-4. Grid splitting: split the 4x4 locally into four 2x2 sheets; try Canva only when practical.
-5. Character cards: male and female reference sheets, white background, studio lighting, no text/logos. Proceed automatically after the 4x4 split unless identity drift is severe.
+4. Grid splitting: split the 4x4 locally into four 2x2 sheets with the Python/Pillow splitter.
+5. Character cards: male and female seven-panel technical turnaround sheets, white background, studio lighting, no text/logos/watermarks/UI. Proceed automatically after the 4x4 split unless identity drift is severe.
 6. Video provider check: after assets and video prompts are ready, detect connected video generation providers or guide manual platform use.
 7. Pre-submit Topview queue decision: when using Topview automation, show video settings, cost estimate, available queue/runtime estimate, and ask whether to use normal queue or Quick Generate before submitting video clips.
 8. Video generation: generate or manually hand off four silent 15-second clips, defaulting to Standard 720p at 9:16 unless the user changes quality settings.
 9. Manual music prompt: write `audio/music_prompt_zh.txt` and remind the user to generate music with their preferred tool.
-10. Assembly: concatenate clips with FFmpeg or Remotion, optionally add a user-provided music file, export final MP4.
-11. QA: check identity consistency, no grid layout in video, no text/watermark, all files in output folder.
+10. Assembly decision: after four clips exist, ask whether to use FFmpeg for simple joining or Remotion/HyperFrames for richer editing such as transitions, trims, captions, light leaks, rhythm-aware edits, and reusable compositions.
+11. Assembly: concatenate clips with FFmpeg, Remotion, or HyperFrames, optionally add a user-provided music file, export final MP4.
+12. QA: check identity consistency, no grid layout in video, no text/watermark, all files in output folder.
 
 ## Tool Routing
 
@@ -44,19 +45,19 @@ Typical task ownership:
 When a user installs or runs this skill on a new machine, run [scripts/check-tools.py](scripts/check-tools.py) before the workflow starts.
 
 - Required for the automated local workflow: Python, Pillow, FFmpeg, FFprobe, and Remotion readiness checks for richer editing.
-- Optional: Topview skill, Node, npm, or other provider-specific CLIs.
+- Optional: Topview skill, HyperFrames plugin/skill for editing only, Node, npm, or other provider-specific CLIs.
 - If required dependencies are missing, show the missing items and ask the user whether to install them before taking installation action.
 - If optional video generation providers are missing, continue to asset and prompt preparation, then use the manual video platform handoff.
 
 ### Image generation
 
-Prefer Topview `ai_image.py`:
+Use Codex Image Gen with `gpt-image-2` as the preferred image route for identity-critical assets.
 
-- Text-to-image for the memory grids.
-- Image edit for character cards from one or more memory sheets.
-- Default image model: `Nano Banana 2`, unless constraints require another Topview model.
+- Character cards must default to Codex Image Gen / `gpt-image-2`, using the `imagegen` skill and the built-in image generation/editing path.
+- Do not generate character cards with Topview image models by default. Topview's default image route can use lower-fidelity models that may preserve source-image fragments or mix identities.
+- Use Topview `ai_image.py` only for memory grids or other image tasks when the user explicitly selects Topview or accepts that provider for the current image step.
 - Default aspect ratio: `1:1` for grids and character cards.
-- Save downloads to the project output folder.
+- Save final selected downloads or generated image assets to the project output folder. Do not leave project assets only under the default Codex generated-images directory.
 
 Identity rule:
 
@@ -65,30 +66,31 @@ Identity rule:
 - After the 4x4 image is generated, inspect it before splitting. If the man or woman clearly changes identity across cells, rerun the 4x4 prompt instead of creating character cards or videos.
 - Only use direct 2x2 generation when the workflow already has a strong couple reference image or character cards, and pass those references into an image-edit workflow.
 
-### Canva crop attempt
+### Local 2x2 splitting
 
-Try Canva only when one of these is true:
+Use [scripts/split-grid.py](scripts/split-grid.py) to split the approved 4x4 image into four 2x2 memory sheets. This is the only default crop route. Do not use design tools for this step, and do not fall back to independent 2x2 text-to-image generation unless the user accepts the identity drift risk or a locked reference image exists.
 
-- The source image already exists as a Canva design.
-- The image is available as a public HTTPS URL.
-- The user explicitly asks to use Canva manually.
-
-Do not spend more than one short attempt on Canva for local image cropping. If Canva cannot directly access the local file, use [scripts/split-grid.py](scripts/split-grid.py). Do not fall back to independent 2x2 text-to-image generation unless the user accepts the identity drift risk or a locked reference image exists.
+If the Python splitter fails, try to fix the local image or Pillow issue first. After 3 failed attempts, provide manual crop instructions rather than generating four independent 2x2 sheets by default.
 
 ### Character card generation
 
 Create character cards automatically after the 4x4 grid is generated and split into four 2x2 sheets. Do not ask the user to confirm before generating the cards unless the 4x4 has severe identity drift that would make the workflow unusable.
 
+- Generate character cards with Codex Image Gen / `gpt-image-2`, not Topview, unless the user explicitly asks for Topview for this step after being warned about possible lower model quality.
+- Treat Topview character-card generation as a downgrade/fallback route, not the default route.
+- When the source references are local files, inspect or load the selected 2x2 sheets into the conversation context before using Codex Image Gen so the model can use them as visual references.
 - Use the clean studio character card templates in [references/prompts.md](references/prompts.md).
 - Generate one card for the man and one card for the woman.
 - Keep one unified wardrobe per card. Do not allow outfit changes inside one card.
-- Keep a pure white studio background. Do not include travel photo fragments, scenic overlays, ghosted reference images, inset memories, grids, labels, text, logos, or UI.
+- Use the same fixed seven-panel layout for both male and female cards: top row has four full-body standing views in this order: front, left profile facing screen left, right profile facing screen right, back; bottom row has three close-up portraits in this order: front small smile, left profile serious, right profile serious.
+- Keep a pure white studio background with clean panel separation, consistent scale, consistent head height, same foot baseline for full-body views, and consistent facial scale for portraits.
+- Do not include travel photo fragments, scenic overlays, ghosted reference images, inset memories, grids, labels, readable text, logos, watermarks, measurement marks, screenshots, or UI.
 - Reject and rerun any character card that contains background remnants from the reference photos or that mixes multiple identities.
-- Use the approved `character_female_v3` pattern as the female card standard: one same woman only, extracted identity only, unified wardrobe, plain white background, no original-reference-image remnants.
-- Use turnaround-sheet language: exact same character, front/side/back views, same scale, same ground line, orthographic camera, flat even studio lighting, no perspective scene, and no storytelling background.
+- Use the approved clean male summer card format as the visual target: technical model turnaround sheet, 1:1 frame, top full-body row, bottom portrait row, no labels, no scenery.
+- Use turnaround-sheet language: exact same character, four full-body views plus three portraits, same scale, same ground line, orthographic camera, flat even studio lighting, no perspective scene, and no storytelling background.
 - If full turnaround cards keep importing scene fragments after 3 attempts, switch to fallback identity references: one clean full-body white-background image plus clean head-angle crops/portraits. Use the fallback for video instead of spending more attempts on flawed character sheets.
 
-### Topview video generation
+### Video provider selection
 
 After the four 2x2 sheets, character cards, and video prompts are ready, run [scripts/check-video-providers.py](scripts/check-video-providers.py).
 
@@ -96,6 +98,8 @@ After the four 2x2 sheets, character cards, and video prompts are ready, run [sc
 - If another video generation API is connected, adapt the same exported assets and prompts to that provider's supported reference-image workflow.
 - If no video generation API is connected, ask which platform the user wants to use, such as Lovart, Krea, LibTV, Seedance API, Topview UI, or another tool. Then provide manual instructions using the exported 2x2 sheets, character cards, and video prompts.
 - Never block the workflow solely because Topview is unavailable.
+
+### Topview video generation
 
 For Topview automation, use `video_gen.py run --type omni` with:
 
@@ -121,6 +125,22 @@ If Topview reports a heavy queue, long ETA, or a "Quickly Generate" option that 
 
 The finished vlog target is about 1 minute: four 15-second clips assembled in order, with optional music matched to the final 60-second duration.
 
+### HyperFrames editing only
+
+HyperFrames is not a default provider for creating the four photoreal 15-second image-to-video clips. Do not offer HyperFrames as a clip generation route before Topview, other APIs, or manual platform selection. Use a real video generation provider or manual video platform for the four source clips.
+
+Use HyperFrames only after the four video clips already exist and the user wants richer editing instead of simple FFmpeg joining.
+
+HyperFrames is appropriate for:
+
+- HTML/GSAP-based video composition.
+- Transitions, trims, crops, subtitles, light leaks, overlays, and rhythm-aware edits.
+- Reusable composition structure for later projects.
+
+When authoring HyperFrames, follow the HyperFrames and HyperFrames CLI skills. Use a 9:16 composition, about 60 seconds total, four 15-second scenes, and read the relevant HyperFrames transition/caption/audio-reactive references before authoring. Run `npx hyperframes lint`, `npx hyperframes inspect`, and `npx hyperframes render` when a HyperFrames project is authored.
+
+If HyperFrames renders blurry or over-compressed output, stop using it for clip synthesis and keep it only for edits over already-generated clips. Prefer provider-native video generation for the source clips, then use HyperFrames only for final layout/editing if it preserves acceptable quality.
+
 ### Music prompt handoff
 
 Do not use Gemini CLI or any automatic music generation tool by default. Always write the final Chinese music prompt to `audio/music_prompt_zh.txt`, then remind the user to generate the soundtrack manually with their preferred tool because music tools and user habits vary.
@@ -129,7 +149,13 @@ If the user later provides a generated music file, save or reference it under `a
 
 ### Video assembly
 
-Prefer FFmpeg for simple concatenation and Remotion for richer editing, transitions, timing adjustments, captions, overlays, or music-aware assembly. Use [scripts/assemble-vlog.py](scripts/assemble-vlog.py) when FFmpeg is enough. When Remotion is requested or useful, follow the Remotion plugin best practices and scaffold a small Remotion project instead of hand-writing ad hoc video code. If neither FFmpeg nor Remotion is usable after 3 attempts, provide the ordered clip list and any user-provided music file for manual assembly in Clipchamp, CapCut, Premiere, or another editor.
+After four clips are generated, ask the user which assembly route they want:
+
+- FFmpeg for a simple join and optional music mux.
+- Remotion for React-based transitions, trims, captions, overlays, music-aware timing, or reusable React composition.
+- HyperFrames for HTML/GSAP-based transitions, trims, captions, light leaks, rhythm-aware edits, overlays, and reusable HyperFrames composition.
+
+Use [scripts/assemble-vlog.py](scripts/assemble-vlog.py) when FFmpeg is enough. When Remotion is requested or useful, follow the Remotion plugin best practices and scaffold a small Remotion project instead of hand-writing ad hoc video code. When HyperFrames is requested or useful, follow the HyperFrames and HyperFrames CLI skills, scaffold or author a HyperFrames project, lint/inspect it, then render. If none of FFmpeg, Remotion, or HyperFrames is usable after 3 attempts, provide the ordered clip list and any user-provided music file for manual assembly in Clipchamp, CapCut, Premiere, or another editor.
 
 ## Required References
 

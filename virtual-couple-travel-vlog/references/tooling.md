@@ -11,7 +11,7 @@ Expected tools:
 - Required: FFmpeg and FFprobe for final assembly.
 - Required for Remotion editing path: Node, npm, npx, and the Remotion plugin/skill.
 - Optional: Topview skill when the user wants automated Topview generation.
-- Optional: Canva plugin if the input can be accessed by Canva.
+- Optional: HyperFrames plugin/skill when the user wants richer HTML/GSAP editing after the four source clips already exist.
 - Optional: Node/npm only when a chosen provider needs a local CLI.
 - No music generation CLI is required. The workflow writes a manual Chinese music prompt instead.
 
@@ -59,11 +59,7 @@ For image generation:
 python "<TOPVIEW_SKILL>/scripts/ai_image.py" run --type text2image --model "Nano Banana 2" --prompt "<PROMPT>" --aspect-ratio "1:1" --resolution "2K" --output-dir "<PROJECT>/images"
 ```
 
-For character cards:
-
-```bash
-python "<TOPVIEW_SKILL>/scripts/ai_image.py" run --type image_edit --model "Nano Banana 2" --prompt "<CHARACTER_CARD_PROMPT>" --aspect-ratio "1:1" --resolution "2K" --input-images "<SHEET_1>" "<SHEET_2>" --output-dir "<PROJECT>/images"
-```
+Do not use Topview image models for character cards by default. Character cards are identity-critical and should use Codex Image Gen / `gpt-image-2` unless the user explicitly accepts a lower-quality fallback.
 
 For Omni Reference video:
 
@@ -140,12 +136,12 @@ After the 2x2 sheets, character cards, and video prompts are prepared, check whe
 python "<THIS_SKILL>/scripts/check-video-providers.py"
 ```
 
-The checker looks for:
+The checker looks for source video generation providers:
 
 - Topview skill in common local skill folders.
 - Common API environment variables for Seedance, Krea, Lovart, and LibTV.
 
-If a provider is detected, ask the user whether to use it for automation. If no provider is detected, ask which platform they want to use, then provide manual instructions.
+Do not treat HyperFrames as a source video generation provider. If a provider is detected, ask the user whether to use it for automation. If no provider is detected, ask which platform they want to use, then provide manual instructions.
 
 Manual video generation package:
 
@@ -163,10 +159,6 @@ Manual instructions:
 5. Download outputs as `videos/clip_01.mp4` through `videos/clip_04.mp4`.
 
 If the user names a platform, adapt the wording to that platform's UI. Keep the core mapping the same: 2x2 sheet = memory reference, male/female cards = identity references, matching prompt = video direction.
-
-## Canva Decision
-
-Canva plugin is useful for design assets, but local generated PNG files are not directly accessible unless they are uploaded through a supported Canva flow or public HTTPS URL. For automated local workflows, use `scripts/split-grid.py` instead of forcing Canva.
 
 ## FFmpeg Assembly
 
@@ -195,6 +187,66 @@ Dependency expectations:
 - Render final MP4 with the Remotion CLI after defining a 720x1280, 24fps, about-60-second composition.
 
 Keep FFmpeg as the fallback for simple joining and audio muxing. Do not force Remotion when a direct concat is enough.
+
+## HyperFrames Assembly
+
+Use the HyperFrames plugin only after four source clips already exist and the user selects HyperFrames for richer editing. Do not use HyperFrames as the source provider for the four photoreal 15-second image-to-video clips; this route can compress stills heavily and produce lower-quality faux motion.
+
+Use HyperFrames after four clips exist when the user wants:
+
+- transitions;
+- crops or trims;
+- captions/subtitles;
+- light leaks and animated overlays;
+- rhythm-aware editing;
+- reusable HTML/GSAP composition.
+
+Post-generation assembly decision text:
+
+```text
+The four clips are ready. Do you want a simple FFmpeg join, or a richer edit with Remotion or HyperFrames for transitions, trims/crops, captions, light leaks, rhythm-aware timing, and reusable composition?
+```
+
+When authoring HyperFrames:
+
+- Read the `hyperframes` and `hyperframes-cli` skills.
+- Use a 9:16 composition, usually 720x1280 or 1080x1920.
+- Keep the final duration around 60 seconds for four 15-second clips.
+- Use `npx hyperframes lint`, `npx hyperframes inspect`, and `npx hyperframes render`.
+- Keep FFmpeg as the fallback for simple joining when the user does not need a designed edit.
+
+### HyperFrames Chrome Runtime Fix
+
+HyperFrames may report that Chrome is available while rendering still fails because its expected `chrome-headless-shell.exe` cache path is missing. On Windows, this was fixed without deleting anything by copying the locally installed Chrome runtime into HyperFrames' cache path.
+
+Use this as a last-mile runtime repair when `npx hyperframes inspect` or `npx hyperframes render` fails with a missing Chrome/headless-shell browser path:
+
+1. Check the HyperFrames browser cache path in the error output, usually under:
+
+```text
+%USERPROFILE%\.cache\hyperframes\chrome\chrome-headless-shell\<platform-and-version>\
+```
+
+2. Check the local Chrome installation, commonly:
+
+```text
+C:\Program Files\Google\Chrome\Application
+```
+
+3. Copy Chrome's application files into the expected HyperFrames cache directory. If HyperFrames specifically expects `chrome-headless-shell.exe`, copy `chrome.exe` to that filename inside the cache directory.
+
+4. Rerun:
+
+```bash
+npx hyperframes inspect . --samples 8 --json
+npx hyperframes render . --output "<PROJECT>/videos/final_vlog.mp4"
+```
+
+Notes:
+
+- This is a compatibility workaround, not a content-generation feature.
+- Do not delete existing browser caches unless the user gives explicit second confirmation.
+- Prefer a normal HyperFrames browser install/cache repair if the CLI exposes a working command on the current machine.
 
 ## Manual Music Prompt
 
