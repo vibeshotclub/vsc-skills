@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibeshot Candid Photography"
+  short_description: "生成真实抓拍感与非常规机位的人像摄影提示词"
+  default_prompt: "使用 $vibeshot-candid-photography 生成 10 组真实生活抓拍感人像摄影提示词。"
