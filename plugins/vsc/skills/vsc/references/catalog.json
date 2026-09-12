@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "name": "character-candid-photography",
+      "description": "将指定成年角色转译为真人 COS 或二次元角色摄影提示词，强调前景遮挡、长焦观察、手机快拍和发现镜头的电影化瞬间。适用于角色名驱动的虚构摆拍、隐蔽观察视角或 n=10 角色抓拍提示词；普通生活人像不属于本技能的主要范围。",
+      "category": "人像摄影",
+      "deliverables": [
+        "prompt"
+      ],
+      "distinction": "指定成年角色的 COS 或二次元抓拍，强调遮挡观察、长焦与角色辨识；可批量提示词。普通生活人像优先生活抓拍；夏季泳装伴侣或朋友视角单图优先夏季 POV。",
+      "sha256": "9e199dae1db8b26c9da8632586da7c271ca0411cfce5a8d68fd60f8be02a62f5"
+    },
+    {
+      "name": "codex-image-to-eagle",
+      "description": "Archive Codex-generated images from the current user's Codex generated_images directory into Eagle with the prompt saved as annotation. Use when the user asks to save, archive, import, or sync Codex generated images to Eagle with prompts, tags, and folders.",
+      "category": "图片归档",
+      "deliverables": [
+        "archive"
+      ],
+      "distinction": "将已有 Codex 生成图片连同原始提示词导入 Eagle；依赖实际图片来源与 Eagle，不负责生图，也不泛化为任意素材库迁移。",
+      "sha256": "c37d18319e3f2319e98359879b7f8ba2175a25339803edc8b91ff962ebe3a736"
+    },
+    {
+      "name": "rare-style-explorer",
+      "description": "Generate and refine AIGC image prompts by combining rare, prompt-ready visual sub-style tags from a bundled 620-entry style library. Use when the user wants style exploration, image prompt variants, rare visual styles, non-generic aesthetics, style mixing, prompt matrices, or subject-to-style ideation for image generation.",
+      "category": "风格探索",
+      "deliverables": [
+        "prompt"
+      ],
+      "distinction": "为给定主体探索多个稀有亚风格或风格组合，支持产品、人物、海报、场景。固定东方神怪工笔水墨方向优先专用技能；本技能交付提示词而非直接生图。",
+      "sha256": "cb718f79a46aac106cfe00386e40048434f49bb93549c250e634b842c6cff639"
+    },
+    {
+      "name": "shan-ze-school",
+      "description": "Generate or refine prompts for 杉泽流派 / Shan Ze school-inspired new-oriental mythic ink-and-color fantasy images, especially when the user asks for 山海经、神怪、异兽、妖怪、国风神话、工笔水墨奇幻、东方幻想生物插画, or wants an existing prompt rewritten into this visual language. Use for original image-generation prompts, prompt rewrites, style transfer phrasing, and concise style analysis that translates any living-artist reference into broader art-historical visual grammar.",
+      "category": "东方幻想",
+      "deliverables": [
+        "prompt",
+        "image"
+      ],
+      "distinction": "明确的东方神怪、山海经异兽、工笔水墨奇幻方向，支持提示词改写及可用工具下生图；广泛探索多种风格优先风格探索，不覆盖普通写实 COS。",
+      "sha256": "456d24b653afff3662bf97337b99221963bf8603e6bd3d9202d9b05d83485d9f"
+    },
+    {
+      "name": "summer-boyfriend-pov",
+      "description": "生成一张成年人物夏季泳装自然抓拍照片，支持单人、双人、多人同框、分职责垫图和任意媒介角色 COS。适用于 Summer Boyfriend POV、伴侣或朋友视角的夏季旅行抓拍、人物垫图泳装 COS；不用于角色设定页或分镜布局。",
+      "category": "人像摄影",
+      "deliverables": [
+        "prompt",
+        "image"
+      ],
+      "distinction": "夏季泳装、伴侣或朋友视角的一张独立照片，支持多人及角色 COS；只要提示词也支持。不用于照片墙、分镜或角色设定页。",
+      "sha256": "f2b3f50c3e0fc8460ef5e826fe5f8cbeb037c14ab2e2978c8a56d34ff5221477"
+    },
+    {
+      "name": "vibeshot-candid-photography",
+      "description": "生成具有真实生活摄影感、偶然抓拍感、非常规机位和强烈空间层次的人像写真提示词。适用于用户要求 candid photography、生活感人像、韩系 INS 人像、自然遮挡、非常规构图或批量摄影提示词时。",
+      "category": "人像摄影",
+      "deliverables": [
+        "prompt"
+      ],
+      "distinction": "普通生活感人像、自然遮挡、非常规机位和批量摄影提示词；无指定角色或夏季泳装 POV 要求时适用。仅出现泳池或夏天不等于泳装 POV。",
+      "sha256": "68465d067dbcf5c39725721778c918df1ed2b93705db070d43e90e387b8d6206"
+    },
+    {
+      "name": "virtual-couple-travel-vlog",
+      "description": "Create virtual couple travel vlog workflows and assets from a user-provided theme, destination, couple profile, output folder, or reference images. Use when Codex needs to generate nostalgic iPhone travel photo grids, split 4x4 grids into four 2x2 memory sheets, create male/female character reference cards, generate Topview Omni Reference video clips, write manual Chinese music prompts, assemble final vlog videos, and save all assets in a user-selected dedicated project folder.",
+      "category": "旅行视频",
+      "deliverables": [
+        "prompt",
+        "image",
+        "video",
+        "workflow"
+      ],
+      "distinction": "虚拟情侣旅行照片墙、角色卡和连贯 Vlog 工作流；可按用户范围交付方案或提示词，不把方案请求扩大为视频生成。普通情侣单张照片不自动进入此工作流。",
+      "sha256": "503d717d7ed176791543fb2297fed5d215c4ea20854fbf4f450af4bbe60c0156"
+    }
+  ]
+}

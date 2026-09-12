@@ -1,0 +1,14 @@
+{
+  "name": "vsc-local",
+  "owner": {
+    "name": "vibeshotclub"
+  },
+  "plugins": [
+    {
+      "name": "vsc",
+      "source": {
+        "path": "plugins/vsc"
+      }
+    }
+  ]
+}

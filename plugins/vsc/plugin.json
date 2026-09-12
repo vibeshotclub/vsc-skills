@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "id": "vsc",
+  "name": "vsc",
+  "display_name": "VSC",
+  "version": "0.1.0",
+  "description": "Vibeshot Club visual skill router and skills collection.",
+  "author": {
+    "name": "vibeshotclub",
+    "url": "https://github.com/vibeshotclub"
+  },
+  "repository": "https://github.com/vibeshotclub/vsc-skills",
+  "license": "MIT",
+  "skills": [
+    "skills/character-candid-photography",
+    "skills/codex-image-to-eagle",
+    "skills/rare-style-explorer",
+    "skills/shan-ze-school",
+    "skills/summer-boyfriend-pov",
+    "skills/vibeshot-candid-photography",
+    "skills/virtual-couple-travel-vlog",
+    "skills/vsc"
+  ]
+}

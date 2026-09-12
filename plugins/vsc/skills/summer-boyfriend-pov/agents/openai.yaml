@@ -1,0 +1,4 @@
+interface:
+  display_name: "SUMMER BOYFRIEND POV"
+  short_description: "生成成年人物夏季自然抓拍单图，支持多人同框、垫图与角色 COS"
+  default_prompt: "使用 $summer-boyfriend-pov 生成一张成年人物夏季泳装自然抓拍照片，ONE STANDALONE PHOTOGRAPH。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rare Style Explorer"
+  short_description: "为生图主体生成稀有亚种风格组合与提示词变体方案工具"
+  default_prompt: "Use $rare-style-explorer to generate rare AIGC style prompt variations for my subject."

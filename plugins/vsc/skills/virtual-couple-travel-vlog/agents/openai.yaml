@@ -1,0 +1,3 @@
+display_name: Virtual Couple Travel Vlog
+short_description: Automates nostalgic virtual couple travel vlog workflows.
+default_prompt: Create a virtual couple travel vlog workflow for a new theme and scene, asking the user to choose an output root before creating project assets unless they already provided one.

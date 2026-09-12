@@ -1,0 +1,4 @@
+interface:
+  display_name: "杉泽流派"
+  short_description: "生成或改写山海经神怪工笔奇幻提示词。"
+  default_prompt: "用$杉泽流派把一个山海经异兽想法改写成可直接用于出图的高质量提示词。"

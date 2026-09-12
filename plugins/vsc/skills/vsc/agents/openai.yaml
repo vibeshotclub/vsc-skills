@@ -1,0 +1,4 @@
+interface:
+  display_name: "VSC 创作入口"
+  short_description: "描述你想做的作品，自动选择合适的 VSC 技能并直接开始创作"
+  default_prompt: "使用 $vsc，根据当前对话选择合适的 VSC 技能并直接完成我的创作需求。"
